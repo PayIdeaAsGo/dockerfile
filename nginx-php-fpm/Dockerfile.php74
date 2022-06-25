@@ -1,0 +1,39 @@
+FROM php:7.4-fpm-alpine as fpm
+ENV CFLAGS=-O3
+WORKDIR /var/www
+RUN apk add --no-cache $PHPIZE_DEPS libzip libxml2 freetype libpng libjpeg-turbo libwebp \
+  libzip-dev libxml2-dev freetype-dev libpng-dev libjpeg-turbo-dev libwebp-dev \
+  && pecl install -osf redis \
+  && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
+  && docker-php-ext-install gd pdo pdo_mysql bcmath zip dom iconv opcache \
+  && docker-php-ext-enable gd pdo pdo_mysql bcmath zip dom iconv opcache redis \
+  # && rm /usr/bin/iconv \
+  # && curl -SL http://ftp.gnu.org/pub/gnu/libiconv/libiconv-1.14.tar.gz | tar -xz -C . \
+  # && cd libiconv-1.14 \
+  # && ./configure --prefix=/usr/local \
+  # && curl -SL https://raw.githubusercontent.com/mxe/mxe/7e231efd245996b886b501dad780761205ecf376/src/libiconv-1-fixes.patch \
+  # | patch -p1 -u  \
+  # && make \
+  # && make install \
+  # && libtool --finish /usr/local/lib \
+  # && cd .. \
+  # && rm -rf libiconv-1.14 \
+  && apk del $PHPIZE_DEPS libzip-dev libxml2-dev freetype-dev libpng-dev libjpeg-turbo-dev libwebp-dev
+
+# ENV LD_PRELOAD /usr/local/lib/preloadable_libiconv.so
+
+RUN sed -e "/display_errors = Off/c\display_errors = On" \
+  -e "/;error_log = syslog/c\error_log = /proc/self/fd/2" \
+  /usr/local/etc/php/php.ini-production > /usr/local/etc/php/php.ini
+# RUN cat /usr/local/etc/php/php.ini-production > /usr/local/etc/php/php.ini
+
+# FROM fpm as crontab
+# COPY crontab /var/spool/cron/crontabs/www-data
+
+# ENTRYPOINT [ "crond","-f","-l","0","-L","/dev/stdout" ]
+
+FROM fpm as cli
+RUN  apk --no-cache add unzip git \
+  && curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer;
+
+ENTRYPOINT [ "sh" ]

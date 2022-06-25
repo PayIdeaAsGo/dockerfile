@@ -1,0 +1,52 @@
+steps:
+  - name: "asia.gcr.io/$PROJECT_ID/php:latest"
+    args:
+      - "-c"
+      - >
+        composer install --prefer-dist --optimize-autoloader
+        --classmap-authoritative --apcu-autoloader
+    id: Composer install
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - "-c"
+      - |
+        cat << EOF > Dockerfile
+        FROM alpine
+        COPY . /var/www
+        EOF
+        docker build -t asia.gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA .
+    id: Docker build
+    entrypoint: sh
+  - name: gcr.io/cloud-builders/kubectl
+    args:
+      - patch
+      - deployment/$_SERVICE
+      - "-n"
+      - $_NAMESPACE
+      - "-p"
+      - >-
+        {"spec": {"template": {"spec": {"initContainers":[{"name":"cinit",
+        "image":"asia.gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA"}]}}}}
+    id: Patch Service version
+    waitFor:
+      - Composer install
+  - name: gcr.io/cloud-builders/kubectl
+    args:
+      - patch
+      - cronjob/$_SERVICE-cronjob
+      - "-n"
+      - $_NAMESPACE
+      - "-p"
+      - >-
+        {"spec": {"jobTemplate": {"spec": { "template": {"spec": {"initContainers":[{"name":"cinit",
+        "image":"asia.gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA"}]}}}}}}
+    id: Patch cronjob version
+    waitFor:
+      - Composer install
+images:
+  - "asia.gcr.io/$PROJECT_ID/$_SERVICE:$SHORT_SHA"
+options:
+  env:
+    - CLOUDSDK_COMPUTE_REGION=$_CLOUDSDK_COMPUTE_REGION
+    - CLOUDSDK_COMPUTE_ZONE=$_CLOUDSDK_COMPUTE_ZONE
+    - CLOUDSDK_CONTAINER_CLUSTER=$_CLOUDSDK_CONTAINER_CLUSTER

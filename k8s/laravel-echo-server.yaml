@@ -1,0 +1,133 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: laravel-echo-server
+  name: laravel-echo-server
+spec:
+  minReadySeconds: 30
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: laravel-echo-server
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 10%
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        seccomp.security.alpha.kubernetes.io/pod: runtime/default
+      labels:
+        app: laravel-echo-server
+    spec:
+      containers:
+        - image: asia.gcr.io/${PROJECT_ID}/laravel-echo-server:latest
+          imagePullPolicy: Always
+          name: laravel-echo-server
+          ports:
+            - containerPort: 6001
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+          securityContext:
+            capabilities:
+              drop:
+                - NET_RAW
+          volumeMounts:
+            - name: config
+              mountPath: /app/laravel-echo-server.json
+              subPath: laravel-echo-server.json
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 60
+      volumes:
+        - name: config
+          configMap:
+            # Provide the name of the ConfigMap containing the files you want
+            # to add to the container
+            name: laravel-echo-server-cm
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: redis
+  name: redis
+spec:
+  minReadySeconds: 30
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: redis
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 10%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - image: redis
+          name: redis
+          resources:
+            requests:
+              cpu: 50m
+              memory: 512Mi
+          ports:
+            - containerPort: 6379
+              protocol: TCP
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 60
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    cloud.google.com/backend-config: '{"default": "laravel-echo-server-healthz"}'
+    cloud.google.com/neg: '{"ingress":true}'
+  name: laravel-echo-server-svc
+spec:
+  ports:
+    - port: 6001
+      protocol: TCP
+      targetPort: 6001
+  selector:
+    app: laravel-echo-server
+  sessionAffinity: None
+  type: ClusterIP
+status:
+  loadBalancer: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    cloud.google.com/neg: '{"ingress":true}'
+  name: redis-svc
+spec:
+  ports:
+    - port: 80
+      protocol: TCP
+      targetPort: 6379
+  selector:
+    app: redis
+  sessionAffinity: None
+  type: ClusterIP
+status:
+  loadBalancer: {}

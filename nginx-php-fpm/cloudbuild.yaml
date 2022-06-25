@@ -1,0 +1,91 @@
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    id: nginx
+    waitFor: ["-"]
+    args:
+      [
+        "build",
+        "--quiet",
+        "--file",
+        "nginx-php-fpm/Dockerfile.nginx",
+        "--tag",
+        "asia.gcr.io/$PROJECT_ID/nginx:$SHORT_SHA",
+        "--tag",
+        "asia.gcr.io/$PROJECT_ID/nginx:latest",
+        "nginx-php-fpm/",
+      ]
+  - name: "gcr.io/cloud-builders/docker"
+    id: laravel-echo-server
+    waitFor: ["-"]
+    args:
+      [
+        "build",
+        "--quiet",
+        "--file",
+        "nginx-php-fpm/Dockerfile.laravel-echo-server",
+        "--tag",
+        "asia.gcr.io/$PROJECT_ID/laravel-echo-server:$SHORT_SHA",
+        "--tag",
+        "asia.gcr.io/$PROJECT_ID/laravel-echo-server:latest",
+        "nginx-php-fpm/",
+      ]
+  - name: "gcr.io/cloud-builders/docker"
+    id: php-fpm
+    waitFor: ["-"]
+    args:
+      [
+        "build",
+        "--quiet",
+        "--file",
+        "nginx-php-fpm/Dockerfile.php74",
+        "--target",
+        "fpm",
+        "--tag",
+        "asia.gcr.io/$PROJECT_ID/php:fpm-$SHORT_SHA",
+        "--tag",
+        "asia.gcr.io/$PROJECT_ID/php:fpm-latest",
+        "nginx-php-fpm/",
+      ]
+  # - name: "gcr.io/cloud-builders/docker"
+  #   args:
+  #     [
+  #       "build",
+  #       "--quiet",
+  #       "--file",
+  #       "nginx-php-fpm/Dockerfile.php74",
+  #       "--target",
+  #       "crontab",
+  #       "--tag",
+  #       "asia.gcr.io/$PROJECT_ID/php:crontab-$SHORT_SHA",
+  #       "--tag",
+  #       "asia.gcr.io/$PROJECT_ID/php:crontab-latest",
+  #       "nginx-php-fpm/",
+  #     ]
+  - name: "gcr.io/cloud-builders/docker"
+    id: php-cli
+    waitFor: ["php-fpm"]
+    args:
+      [
+        "build",
+        "--quiet",
+        "--file",
+        "nginx-php-fpm/Dockerfile.php74",
+        "--target",
+        "cli",
+        "--tag",
+        "asia.gcr.io/$PROJECT_ID/php:$SHORT_SHA",
+        "--tag",
+        "asia.gcr.io/$PROJECT_ID/php:latest",
+        "nginx-php-fpm/",
+      ]
+images:
+  - "asia.gcr.io/$PROJECT_ID/nginx:$SHORT_SHA"
+  - "asia.gcr.io/$PROJECT_ID/nginx:latest"
+  - "asia.gcr.io/$PROJECT_ID/laravel-echo-server:$SHORT_SHA"
+  - "asia.gcr.io/$PROJECT_ID/laravel-echo-server:latest"
+  - "asia.gcr.io/$PROJECT_ID/php:fpm-$SHORT_SHA"
+  - "asia.gcr.io/$PROJECT_ID/php:fpm-latest"
+  # - "asia.gcr.io/$PROJECT_ID/php:crontab-$SHORT_SHA"
+  # - "asia.gcr.io/$PROJECT_ID/php:crontab-latest"
+  - "asia.gcr.io/$PROJECT_ID/php:$SHORT_SHA"
+  - "asia.gcr.io/$PROJECT_ID/php:latest"

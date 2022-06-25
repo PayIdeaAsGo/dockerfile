@@ -1,0 +1,153 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: ${SERVICE}
+  name: ${SERVICE}
+spec:
+  minReadySeconds: 30
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: ${SERVICE}
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 10%
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        seccomp.security.alpha.kubernetes.io/pod: runtime/default
+      labels:
+        app: ${SERVICE}
+    spec:
+      containers:
+        - image: asia.gcr.io/${PROJECT_ID}/nginx:latest
+          imagePullPolicy: Always
+          name: nginx
+          ports:
+            - containerPort: 80
+              protocol: TCP
+          resources: {}
+          securityContext:
+            capabilities:
+              drop:
+                - NET_RAW
+          volumeMounts:
+            - mountPath: /var/www
+              name: www-data
+        - envFrom:
+            - configMapRef:
+                name: ${SERVICE}-cm
+          image: asia.gcr.io/${PROJECT_ID}/php:fpm-latest
+          name: php
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+          volumeMounts:
+            - mountPath: /var/www
+              name: www-data
+      dnsPolicy: ClusterFirst
+      initContainers:
+        - command:
+            - sh
+            - -c
+            - cp -r /var/www /mnt/web/ && chown 82:82 -R /mnt/web/www
+          image: asia.gcr.io/${PROJECT_ID}/${SERVICE}
+          imagePullPolicy: IfNotPresent
+          name: cinit
+          resources: {}
+          securityContext:
+            capabilities:
+              drop:
+                - NET_RAW
+          volumeMounts:
+            - mountPath: /mnt/web/www
+              name: www-data
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 60
+      volumes:
+        - emptyDir: {}
+          name: www-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    cloud.google.com/backend-config: '{"default": "healthz"}'
+    cloud.google.com/neg: '{"ingress":true}'
+  name: ${SERVICE}-svc
+spec:
+  ports:
+    - port: 80
+      protocol: TCP
+      targetPort: 80
+  selector:
+    app: ${SERVICE}
+  sessionAffinity: None
+  type: NodePort
+status:
+  loadBalancer: {}
+---
+apiVersion: v1
+kind: ConfigMap
+data:
+  APP_DEBUG: "false"
+  APP_ENV: production
+  # APP_KEY: base64:SDrUm7cJ9OoTPVpNBodOC+GMnUQIbt+z72IriH5QkYo=
+  APP_NAME: ${SERVICE}
+metadata:
+  name: ${SERVICE}-cm
+---
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: ${SERVICE}-cronjob
+spec:
+  concurrencyPolicy: Replace
+  schedule: "*/1 * * * *"
+  successfulJobsHistoryLimit: 5
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - envFrom:
+                - configMapRef:
+                    name: ${SERVICE}-cm
+              name: ${SERVICE}
+              image: asia.gcr.io/${PROJECT_ID}/php:fpm-latest
+              volumeMounts:
+                - mountPath: /var/www
+                  name: www-data
+              command:
+                - sh
+                - -c
+                - cd /var/www && php artisan schedule:run
+          initContainers:
+            - command:
+                - sh
+                - -c
+                - cp -r /var/www /mnt/web/ && chown 82:82 -R /mnt/web/www
+              image: asia.gcr.io/${PROJECT_ID}/${SERVICE}
+              imagePullPolicy: IfNotPresent
+              name: cinit
+              resources: {}
+              securityContext:
+                capabilities:
+                  drop:
+                    - NET_RAW
+              volumeMounts:
+                - mountPath: /mnt/web/www
+                  name: www-data
+          volumes:
+            - emptyDir: {}
+              name: www-data

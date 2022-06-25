@@ -1,0 +1,9 @@
+FROM node:lts-alpine
+WORKDIR /app
+RUN apk add --update --no-cache sqlite openssl \
+  && apk add --update --no-cache -t .build-deps python make g++ gcc git \
+  && yarn global add --prod --no-lockfile laravel-echo-server uNetworking/uWebSockets.js \
+  && apk del .build-deps
+
+EXPOSE 6001
+CMD laravel-echo-server start --force

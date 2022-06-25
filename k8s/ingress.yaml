@@ -1,0 +1,60 @@
+apiVersion: networking.gke.io/v1beta1
+kind: FrontendConfig
+metadata:
+  name: frontend-config
+spec:
+  redirectToHttps:
+    enabled: true
+    responseCodeName: PERMANENT_REDIRECT
+---
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: healthz
+spec:
+  healthCheck:
+    checkIntervalSec: 15
+    port: 80
+    type: HTTP
+    requestPath: /healthz
+---
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: laravel-echo-server-healthz
+spec:
+  timeoutSec: 3600
+  # healthCheck:
+  #   checkIntervalSec: 15
+  #   port: 80
+  #   type: HTTP
+  #   requestPath: /healthz
+---
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: certificate-example.com
+spec:
+  domains:
+    - example.com
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    kubernetes.io/ingress.class: gce
+    networking.gke.io/v1beta1.FrontendConfig: frontend-config
+    networking.gke.io/managed-certificates: certificate-example.com
+  name: gateway-ingress
+spec:
+  rules:
+    - host: example.com
+      http:
+        paths:
+          - backend:
+              service:
+                name: example-svc
+                port:
+                  number: 80
+            path: /*
+            pathType: ImplementationSpecific
